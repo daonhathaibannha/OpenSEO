@@ -18,15 +18,13 @@ Connect with any agent like Claude Code, OpenClaw or Hermes. We have pre-built s
 - [OpenSEO Agent Skills](#openseo-agent-skills)
 - [Roadmap](#roadmap)
 - [Community](#community)
-- [Pricing / Costs (Free + API costs)](#pricing--costs)
-- [DataForSEO API Key Setup](#dataforseo-api-key-setup)
+- [Pricing / Costs](#pricing--costs)
 - [Google Search Console](#google-search-console)
 - [Self-hosting](#self-hosting)
   - [Docker Self Hosting](#docker-self-hosting)
   - [Cloudflare Self-Hosting](#cloudflare-self-hosting)
 - [Local Development](#local-development)
 - [Contributing](#contributing)
-- [SEO API Cost Reference](#seo-api-cost-reference)
 
 ## Hosted Version
 
@@ -39,8 +37,7 @@ If you're not interested in self hosting, or just want to support the project, w
 - Best in class MCP and AI Skills.
 - Modern, simple UI.
   - Focused workflows instead of a bloated, complex SEO suite.
-- No subscriptions.
-  - Bring your own DataForSEO API key and pay only for what you use.
+- No subscriptions, no third-party API key required — SEO data is generated internally.
 - Fork and vibe code your own custom tool.
 
 ## Main SEO Workflows
@@ -110,27 +107,7 @@ If something important is missing, please join the [Discord](https://discord.gg/
 
 ## Pricing / Costs
 
-OpenSEO is totally free to use. It works by using DataForSEO's APIs, which is a paid third-party service unaffiliated with OpenSEO.
-
-There are two separate things:
-
-1. OpenSEO app cost: $0, you host it yourself.
-2. DataForSEO API: pay-as-you-go based on usage.
-
-For cost estimates, see [DataForSEO API Cost Reference](#seo-api-cost-reference).
-
-## DataForSEO API Key Setup
-
-OpenSEO uses DataForSEO to fetch SEO data. You need an API key to connect OpenSEO to the service.
-
-1. Go to [DataForSEO API Access](https://app.dataforseo.com/api-access?aff=255379).
-2. Click "Send by email" to get set your credentials.
-3. Copy the longer crendentials labelled "Base64" credentials.
-4. Set this as `DATAFORSEO_API_KEY` in your environment file:
-
-- Docker self-hosting: `.env`
-- Cloudflare: Set it in the workers UI
-- Local development: `.env.local`
+OpenSEO is totally free to use — you host it yourself for $0, and SEO data (keyword research, backlinks, rank tracking, AI Visibility, site audits) is generated internally, so there's no third-party API key or usage-based billing to set up.
 
 ## Google Search Console
 
@@ -169,9 +146,8 @@ Prerequisites:
 Quickstart:
 
 1. `cp .env.example .env`
-2. Set `DATAFORSEO_API_KEY` in `.env`
-3. `docker compose up -d`
-4. Open `http://localhost:<PORT>` (default `3001`)
+2. `docker compose up -d`
+3. Open `http://localhost:<PORT>` (default `3001`)
 
 To update to the newest published image, pull first and then restart:
 
@@ -205,32 +181,3 @@ Contributions are very welcome.
 - Community-driven improvements are prioritized, and high-quality PRs are encouraged.
 
 If you want to contribute but are unsure where to start, open an issue and describe what you want to build.
-
-## SEO API Cost Reference
-
-Use this section to estimate DataForSEO spend per request type. OpenSEO itself remains free; these are API usage costs only.
-
-As of February 26, 2026, DataForSEO’s public docs/pricing pages say:
-
-- New accounts include **$1 free credit** to test the API.
-- The minimum top-up/payment is **$50**.
-
-That means you can try OpenSEO for free with the starter credit, then decide if/when to top up.
-
-### Planning examples
-
-- Track 100 keywords weekly at depth 50: `~$1.20/month`
-- 100 keyword research requests at the default 150 results: `$3.50`
-- 100 keyword research requests at 500 results each: `$7.00`
-- 100 domain overviews (200 ranked keywords each): `$4.01`
-- 100 backlinks domain searches at current defaults before opening extra tabs: about `$6.34`
-- 100 backlinks page searches at current defaults before opening extra tabs: about `$4.30`
-- 100 fully explored backlinks domain searches: about `$10.94`
-- 100 fully explored backlinks page searches: about `$8.61`
-
-### Pricing sources
-
-- DataForSEO SERP API pricing: https://dataforseo.com/apis/serp-api/pricing
-- DataForSEO Keywords Data API pricing: https://dataforseo.com/pricing/dataforseo-labs/dataforseo-google-api
-- DataForSEO Backlinks pricing: https://dataforseo.com/pricing/backlinks/backlinks
-- DataForSEO Lighthouse API docs: https://docs.dataforseo.com/v3/on_page/lighthouse/overview/

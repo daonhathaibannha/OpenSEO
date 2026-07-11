@@ -1,17 +1,80 @@
-import { z } from "zod";
 import {
-  BusinessDataBusinessListingsSearchLiveRequestInfo,
-  BusinessDataGoogleQuestionsAndAnswersLiveRequestInfo,
-  type BusinessDataBusinessListingsSearchLiveItem,
+  BusinessDataBusinessListingsSearchLiveItem,
+  RatingInfo,
+  type IBusinessDataBusinessListingsSearchLiveItem,
 } from "dataforseo-client";
-import { businessDataApi } from "@/server/lib/dataforseo/core";
+import type { DataforseoApiResponse } from "@/server/lib/dataforseo/envelope";
 import {
-  assertOk,
-  buildTaskBilling,
-  type DataforseoApiResponse,
-} from "@/server/lib/dataforseo/envelope";
+  hashSeed,
+  pick,
+  randFloat,
+  randInt,
+  seededRandom,
+} from "@/server/lib/dataforseo/mock/random";
 
-type BusinessListingItem = BusinessDataBusinessListingsSearchLiveItem;
+type BusinessListingItem = IBusinessDataBusinessListingsSearchLiveItem;
+
+const BUSINESS_NAME_PARTS = [
+  "Summit",
+  "Riverside",
+  "Golden Gate",
+  "Cedar Grove",
+  "Harborview",
+  "Maple Street",
+  "Union Square",
+  "Lakeside",
+  "Northgate",
+  "Old Town",
+];
+const BUSINESS_NAME_SUFFIXES = [
+  "Bakery",
+  "Auto Repair",
+  "Dental Care",
+  "Coffee Roasters",
+  "Law Office",
+  "Fitness Studio",
+  "Plumbing",
+  "Salon & Spa",
+  "Pizzeria",
+  "Bookstore",
+];
+const STREETS = [
+  "Main St",
+  "Market St",
+  "Broadway",
+  "5th Ave",
+  "Oak St",
+  "Elm St",
+  "Park Ave",
+];
+
+function fakeBusinessListing(
+  seed: number,
+  categories: string[] | undefined,
+): BusinessListingItem {
+  const rand = seededRandom(seed);
+  const category = categories?.length
+    ? pick(rand, categories)
+    : pick(rand, BUSINESS_NAME_SUFFIXES);
+  const title = `${pick(rand, BUSINESS_NAME_PARTS)} ${pick(rand, BUSINESS_NAME_SUFFIXES)}`;
+  return new BusinessDataBusinessListingsSearchLiveItem({
+    type: "business_listing_search",
+    title,
+    category,
+    address: `${randInt(rand, 100, 9999)} ${pick(rand, STREETS)}`,
+    phone: `+1${randInt(rand, 2000000000, 9999999999)}`,
+    domain: `${title.toLowerCase().replace(/[^a-z0-9]+/g, "")}.example.com`,
+    url: `https://${title.toLowerCase().replace(/[^a-z0-9]+/g, "")}.example.com`,
+    rating: new RatingInfo({
+      rating_type: "Max5",
+      value: randFloat(rand, 3.2, 5, 1),
+      votes_count: randInt(rand, 3, 850),
+      rating_max: 5,
+    }),
+    is_claimed: rand() > 0.3,
+    first_seen: "2023-01-15 09:00:00 +00:00",
+  });
+}
 
 export async function fetchBusinessListingsSearch(input: {
   categories?: string[];
@@ -20,48 +83,56 @@ export async function fetchBusinessListingsSearch(input: {
   orderBy?: string[];
   limit: number;
 }): Promise<DataforseoApiResponse<BusinessListingItem[]>> {
-  const response = await businessDataApi().businessListingsSearchLive([
-    new BusinessDataBusinessListingsSearchLiveRequestInfo({
-      categories: input.categories,
-      title: input.title,
-      location_coordinate: input.locationCoordinate,
-      order_by: input.orderBy,
-      limit: input.limit,
-    }),
-  ]);
-  // "No Search Results" (40501) is a valid empty result for obscure
-  // businesses/keywords — DataForSEO still charges for it, so treat it as an
-  // empty success instead of surfacing a charged-task error to the user.
-  const task = assertOk(response, { treatNoResultsAsEmpty: true });
+  const baseSeed = hashSeed(
+    input.title ?? "",
+    input.categories?.join(",") ?? "",
+    input.locationCoordinate,
+  );
+  const count = Math.max(0, Math.min(input.limit, 20));
+  const data = Array.from({ length: count }, (_, index) =>
+    fakeBusinessListing(baseSeed + index, input.categories),
+  );
   return {
-    data: task.result?.[0]?.items ?? [],
-    billing: buildTaskBilling(task),
+    data,
+    billing: {
+      path: [
+        "v3",
+        "business_data",
+        "google",
+        "business_listings_search",
+        "live",
+      ],
+      costUsd: 0,
+    },
   };
 }
 
-// Q&A results carry both answered (`items`) and unanswered
-// (`items_without_answers`) rows; the SDK types this result as `any`, so we
-// validate a generic record shape and flatten both.
-const questionsResultSchema = z
-  .object({
-    items: z.array(z.record(z.string(), z.unknown())).nullable().optional(),
-    items_without_answers: z
-      .array(z.record(z.string(), z.unknown()))
-      .nullable()
-      .optional(),
-  })
-  .passthrough();
+const PROFILE_NAMES = [
+  "Alex M.",
+  "Jordan P.",
+  "Sam K.",
+  "Taylor R.",
+  "Morgan L.",
+];
+const TIME_AGO = ["2 weeks ago", "1 month ago", "3 months ago", "1 year ago"];
 
-function combinedQuestionItems(results: unknown): Record<string, unknown>[] {
-  const list = Array.isArray(results) ? results : [];
-  return list.flatMap((result) => {
-    const parsed = questionsResultSchema.safeParse(result ?? {});
-    if (!parsed.success) return [];
-    return [
-      ...(parsed.data.items ?? []),
-      ...(parsed.data.items_without_answers ?? []),
-    ];
-  });
+function fakeQuestion(seed: number, keyword: string): Record<string, unknown> {
+  const rand = seededRandom(seed);
+  const hasAnswer = rand() > 0.25;
+  return {
+    question_text: `Does this business handle ${keyword}?`,
+    profile_name: pick(rand, PROFILE_NAMES),
+    time_ago: pick(rand, TIME_AGO),
+    items: hasAnswer
+      ? [
+          {
+            answer_text: `Yes, we offer ${keyword} — feel free to call ahead.`,
+            profile_name: pick(rand, PROFILE_NAMES),
+            time_ago: pick(rand, TIME_AGO),
+          },
+        ]
+      : [],
+  };
 }
 
 export async function fetchQuestionsAnswers(input: {
@@ -70,20 +141,20 @@ export async function fetchQuestionsAnswers(input: {
   languageCode: string;
   depth: number;
 }): Promise<DataforseoApiResponse<Record<string, unknown>[]>> {
-  const response = await businessDataApi().googleQuestionsAndAnswersLive([
-    new BusinessDataGoogleQuestionsAndAnswersLiveRequestInfo({
-      keyword: input.keyword,
-      location_coordinate: input.locationCoordinate,
-      language_code: input.languageCode,
-      depth: input.depth,
-    }),
-  ]);
-  // "No Search Results" (40501) is a valid empty result for obscure
-  // businesses/keywords — DataForSEO still charges for it, so treat it as an
-  // empty success instead of surfacing a charged-task error to the user.
-  const task = assertOk(response, { treatNoResultsAsEmpty: true });
+  const baseSeed = hashSeed(
+    input.keyword,
+    input.locationCoordinate,
+    input.languageCode,
+  );
+  const count = Math.max(0, Math.min(Math.ceil(input.depth / 5), 10));
+  const data = Array.from({ length: count }, (_, index) =>
+    fakeQuestion(baseSeed + index, input.keyword),
+  );
   return {
-    data: combinedQuestionItems(task.result),
-    billing: buildTaskBilling(task),
+    data,
+    billing: {
+      path: ["v3", "business_data", "google", "questions_and_answers", "live"],
+      costUsd: 0,
+    },
   };
 }

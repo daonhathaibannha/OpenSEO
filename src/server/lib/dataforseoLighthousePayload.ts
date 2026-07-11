@@ -8,13 +8,6 @@ import {
   type StoredLighthousePayload,
 } from "@/server/lib/lighthouseStoredPayload";
 
-export const requestCategories = [
-  "performance",
-  "accessibility",
-  "best_practices",
-  "seo",
-] as const;
-
 export type LighthouseStrategy = "mobile" | "desktop";
 
 const lighthouseAuditItemsSchema = z

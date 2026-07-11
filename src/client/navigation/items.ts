@@ -111,7 +111,3 @@ export function getProjectNavGroups(projectId: string) {
     },
   ];
 }
-
-export const dataforseoHelpLinkOptions = linkOptions({
-  to: "/help/dataforseo-api-key",
-});

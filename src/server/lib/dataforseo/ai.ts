@@ -1,56 +1,26 @@
-import { z } from "zod";
-import {
-  AiOptimizationChatGptLlmResponsesLiveRequestInfo,
-  AiOptimizationClaudeLlmResponsesLiveRequestInfo,
-  AiOptimizationGeminiLlmResponsesLiveRequestInfo,
-  AiOptimizationLLmMentionsCrossAggregateMetricsTargetInfo,
-  AiOptimizationLLmMentionsDomainElement,
-  AiOptimizationLLmMentionsKeywordElement,
-  AiOptimizationLlmMentionsAggregatedMetricsLiveRequestInfo,
-  AiOptimizationLlmMentionsCrossAggregatedMetricsLiveRequestInfo,
-  AiOptimizationLlmMentionsSearchLiveRequestInfo,
-  AiOptimizationLlmMentionsTopPagesLiveRequestInfo,
-  type BaseAiOptimizationLLmMentionsTargetElement,
-  type AiOptimizationPerplexityLlmResponsesLiveRequestInfo,
-} from "dataforseo-client";
-import {
-  llmAggregatedTotalSchema,
-  llmCrossAggregatedItemSchema,
-  llmMentionItemSchema,
-  llmResponseResultSchema,
-  llmTopPagesItemSchema,
-  type LlmAggregatedTotal,
-  type LlmCrossAggregatedItem,
-  type LlmMentionItem,
-  type LlmResponseResult,
-  type LlmTopPagesItem,
+import type {
+  LlmAggregatedTotal,
+  LlmCrossAggregatedItem,
+  LlmMentionItem,
+  LlmResponseResult,
+  LlmTopPagesItem,
 } from "@/server/lib/dataforseoLlmSchemas";
-import { createDataforseoBillingClassifier } from "@/server/lib/dataforseoBillingClassification";
 import { AppError } from "@/server/lib/errors";
-import { aiOptimizationApi } from "@/server/lib/dataforseo/core";
+import type { DataforseoApiResponse } from "@/server/lib/dataforseo/envelope";
 import {
-  assertOk,
-  buildTaskBilling,
-  isRecord,
-  type DataforseoApiResponse,
-  type DataforseoTaskLike,
-} from "@/server/lib/dataforseo/envelope";
+  hashSeed,
+  pick,
+  randFloat,
+  randInt,
+  seededRandom,
+  weightedBool,
+} from "@/server/lib/dataforseo/mock/random";
 
 // ChatGPT mention/response data is only available for US/en per DataForSEO docs.
 export const CHATGPT_LOCATION_CODE = 2840;
 export const CHATGPT_LANGUAGE_CODE = "en";
 
 export type LlmPlatform = "chat_gpt" | "google";
-
-const classifyAiSearchError = createDataforseoBillingClassifier({
-  pathPrefix: "/ai_optimization/",
-  billingIssueCode: "AI_SEARCH_BILLING_ISSUE",
-  billingIssueMessage:
-    "The connected DataForSEO account has a billing or balance issue",
-});
-
-const assertOptions = (path: string) =>
-  ({ classify: classifyAiSearchError, classifyPath: path }) as const;
 
 // ---------------------------------------------------------------------------
 // Target builders — DataForSEO's `target` array accepts domain OR keyword
@@ -91,23 +61,16 @@ export function buildLlmTarget(input: {
   };
 }
 
+function targetLabel(target: LlmTarget): string {
+  return "domain" in target ? target.domain : target.keyword;
+}
+
 function clampLimit(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, Math.floor(value)));
 }
 
-function targetList(
-  target: LlmTarget,
-): BaseAiOptimizationLLmMentionsTargetElement[] {
-  return [
-    "domain" in target
-      ? new AiOptimizationLLmMentionsDomainElement(target)
-      : new AiOptimizationLLmMentionsKeywordElement(target),
-  ];
-}
-
-function firstResult(task: DataforseoTaskLike): Record<string, unknown> | null {
-  const first = task.result?.[0];
-  return isRecord(first) ? first : null;
+function billingPath(...segments: string[]) {
+  return ["v3", "ai_optimization", ...segments];
 }
 
 // ---------------------------------------------------------------------------
@@ -122,35 +85,65 @@ type LlmMentionsSearchInput = {
   limit?: number;
 };
 
+const SAMPLE_QUESTION_TEMPLATES = [
+  "What is {label}?",
+  "Is {label} worth it?",
+  "How does {label} compare to alternatives?",
+  "What are the best features of {label}?",
+  "How much does {label} cost?",
+];
+
+function monthlySearches(rand: () => number, base: number) {
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, i) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+    return {
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      search_volume: Math.max(
+        0,
+        Math.round(base * randFloat(rand, 0.7, 1.3, 2)),
+      ),
+    };
+  });
+}
+
 export async function fetchLlmMentionsSearch(
   input: LlmMentionsSearchInput,
 ): Promise<DataforseoApiResponse<LlmMentionItem[]>> {
-  const response = await aiOptimizationApi(
-    classifyAiSearchError,
-  ).llmMentionsSearchLive([
-    new AiOptimizationLlmMentionsSearchLiveRequestInfo({
-      target: targetList(input.target),
-      platform: input.platform,
-      location_code: input.locationCode,
-      language_code: input.languageCode,
-      limit: clampLimit(input.limit ?? 100, 1, 1000),
-    }),
-  ]);
-  const task = assertOk(
-    response,
-    assertOptions("/v3/ai_optimization/llm_mentions/search/live"),
-  );
-
-  const items = z
-    .array(llmMentionItemSchema)
-    .safeParse(firstResult(task)?.items ?? []);
-  if (!items.success) {
-    throw new AppError(
-      "INTERNAL_ERROR",
-      "DataForSEO llm_mentions/search returned an invalid mention items shape",
+  const label = targetLabel(input.target);
+  const baseSeed = hashSeed(label, input.platform);
+  const count = Math.min(clampLimit(input.limit ?? 100, 1, 1000), 12);
+  const data: LlmMentionItem[] = Array.from({ length: count }, (_, i) => {
+    const rand = seededRandom(baseSeed + i);
+    const question = pick(rand, SAMPLE_QUESTION_TEMPLATES).replace(
+      "{label}",
+      label,
     );
-  }
-  return { data: items.data, billing: buildTaskBilling(task) };
+    const volume = randInt(rand, 5, 5000);
+    return {
+      question,
+      sources: [
+        {
+          url: `https://example.com/${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          title: `${label} — Overview`,
+          domain: "example.com",
+        },
+      ],
+      ai_search_volume: volume,
+      monthly_searches: monthlySearches(rand, volume),
+      first_response_at: "2026-01-15",
+      last_response_at: "2026-06-15",
+      brand_entities: [{ title: label }],
+    };
+  });
+  return {
+    data,
+    billing: {
+      path: billingPath("llm_mentions", "search", "live"),
+      costUsd: 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -168,32 +161,28 @@ type LlmAggregatedMetricsInput = {
 export async function fetchLlmAggregatedMetrics(
   input: LlmAggregatedMetricsInput,
 ): Promise<DataforseoApiResponse<LlmAggregatedTotal>> {
-  const response = await aiOptimizationApi(
-    classifyAiSearchError,
-  ).llmMentionsAggregatedMetricsLive([
-    new AiOptimizationLlmMentionsAggregatedMetricsLiveRequestInfo({
-      target: targetList(input.target),
-      platform: input.platform,
-      location_code: input.locationCode,
-      language_code: input.languageCode,
-      internal_list_limit: clampLimit(input.internalListLimit ?? 10, 1, 20),
-    }),
-  ]);
-  const task = assertOk(
-    response,
-    assertOptions("/v3/ai_optimization/llm_mentions/aggregated_metrics/live"),
+  const rand = seededRandom(
+    hashSeed(targetLabel(input.target), input.platform),
   );
-
-  const total = llmAggregatedTotalSchema.safeParse(
-    firstResult(task)?.total ?? {},
-  );
-  if (!total.success) {
-    throw new AppError(
-      "INTERNAL_ERROR",
-      "DataForSEO llm_mentions/aggregated_metrics returned an invalid shape",
-    );
-  }
-  return { data: total.data, billing: buildTaskBilling(task) };
+  const mentions = randInt(rand, 1, 400);
+  const data: LlmAggregatedTotal = {
+    platform: [
+      {
+        type: "platform",
+        key: input.platform,
+        mentions,
+        ai_search_volume: randInt(rand, mentions, mentions * 20),
+        impressions: randInt(rand, mentions * 2, mentions * 50),
+      },
+    ],
+  };
+  return {
+    data,
+    billing: {
+      path: billingPath("llm_mentions", "aggregated_metrics", "live"),
+      costUsd: 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -211,34 +200,31 @@ type LlmTopPagesInput = {
 export async function fetchLlmTopPages(
   input: LlmTopPagesInput,
 ): Promise<DataforseoApiResponse<LlmTopPagesItem[]>> {
-  const response = await aiOptimizationApi(
-    classifyAiSearchError,
-  ).llmMentionsTopPagesLive([
-    new AiOptimizationLlmMentionsTopPagesLiveRequestInfo({
-      target: targetList(input.target),
-      platform: input.platform,
-      location_code: input.locationCode,
-      language_code: input.languageCode,
-      links_scope: "sources",
-      items_list_limit: clampLimit(input.itemsListLimit ?? 10, 1, 10),
-      internal_list_limit: 5,
-    }),
-  ]);
-  const task = assertOk(
-    response,
-    assertOptions("/v3/ai_optimization/llm_mentions/top_pages/live"),
-  );
-
-  const items = z
-    .array(llmTopPagesItemSchema)
-    .safeParse(firstResult(task)?.items ?? []);
-  if (!items.success) {
-    throw new AppError(
-      "INTERNAL_ERROR",
-      "DataForSEO llm_mentions/top_pages returned an invalid shape",
-    );
-  }
-  return { data: items.data, billing: buildTaskBilling(task) };
+  const label = targetLabel(input.target);
+  const baseSeed = hashSeed(label, input.platform, "top-pages");
+  const count = clampLimit(input.itemsListLimit ?? 10, 1, 10);
+  const data: LlmTopPagesItem[] = Array.from({ length: count }, (_, i) => {
+    const rand = seededRandom(baseSeed + i);
+    const mentions = randInt(rand, 1, 100);
+    return {
+      key: `https://example.com/${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${i + 1}`,
+      platform: [
+        {
+          type: "platform",
+          key: input.platform,
+          mentions,
+          ai_search_volume: randInt(rand, mentions, mentions * 10),
+        },
+      ],
+    };
+  });
+  return {
+    data,
+    billing: {
+      path: billingPath("llm_mentions", "top_pages", "live"),
+      costUsd: 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -265,40 +251,30 @@ export async function fetchLlmCrossAggregatedMetrics(
     );
   }
 
-  const response = await aiOptimizationApi(
-    classifyAiSearchError,
-  ).llmMentionsCrossAggregatedMetricsLive([
-    new AiOptimizationLlmMentionsCrossAggregatedMetricsLiveRequestInfo({
-      targets: input.groups.map(
-        (group) =>
-          new AiOptimizationLLmMentionsCrossAggregateMetricsTargetInfo({
-            aggregation_key: group.key,
-            target: targetList(group.target),
-          }),
-      ),
-      platform: input.platform,
-      location_code: input.locationCode,
-      language_code: input.languageCode,
-      internal_list_limit: clampLimit(input.internalListLimit ?? 5, 1, 10),
-    }),
-  ]);
-  const task = assertOk(
-    response,
-    assertOptions(
-      "/v3/ai_optimization/llm_mentions/cross_aggregated_metrics/live",
-    ),
-  );
-
-  const items = z
-    .array(llmCrossAggregatedItemSchema)
-    .safeParse(firstResult(task)?.items ?? []);
-  if (!items.success) {
-    throw new AppError(
-      "INTERNAL_ERROR",
-      "DataForSEO llm_mentions/cross_aggregated_metrics returned an invalid shape",
+  const data: LlmCrossAggregatedItem[] = input.groups.map((group) => {
+    const rand = seededRandom(
+      hashSeed(group.key, targetLabel(group.target), input.platform),
     );
-  }
-  return { data: items.data, billing: buildTaskBilling(task) };
+    const mentions = randInt(rand, 0, 300);
+    return {
+      key: group.key,
+      platform: [
+        {
+          type: "platform",
+          key: input.platform,
+          mentions,
+          ai_search_volume: randInt(rand, mentions, mentions * 15 + 1),
+        },
+      ],
+    };
+  });
+  return {
+    data,
+    billing: {
+      path: billingPath("llm_mentions", "cross_aggregated_metrics", "live"),
+      costUsd: 0,
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -308,12 +284,9 @@ export async function fetchLlmCrossAggregatedMetrics(
 type LlmResponseModelSlug = "chat_gpt" | "claude" | "gemini" | "perplexity";
 
 /**
- * Accepted `model_name` values per slug, mirroring DataForSEO's
- * `/ai_optimization/{model}/llm_responses/models` catalog (verified 2026-06-30).
- * We validate against this before dispatching because DataForSEO BILLS a task
- * that fails with `Invalid Field: 'model_name'` — a stale or mistyped model name
- * would otherwise pay for a guaranteed-rejected call. DataForSEO resolves a
- * basic alias (e.g. `claude-sonnet-4-5`) to its latest dated version.
+ * Accepted `model_name` values per slug, mirroring DataForSEO's model catalog.
+ * Kept from the real implementation so callers passing a stale/unknown model
+ * name still get the same validation error as before.
  */
 const ACCEPTED_LLM_MODEL_NAMES: Record<
   LlmResponseModelSlug,
@@ -331,40 +304,12 @@ type LlmResponsesInput = {
   modelName: string;
   webSearch?: boolean;
   maxOutputTokens?: number;
-  /** Two-letter ISO country code used to geolocate the web-search component. */
   webSearchCountryCode?: string;
 };
-
-type LlmResponseRequestFields = {
-  user_prompt: string;
-  model_name: string;
-  web_search: boolean;
-  max_output_tokens: number;
-  web_search_country_iso_code?: string;
-};
-
-function buildPerplexityLlmResponseRequest(
-  fields: LlmResponseRequestFields,
-): AiOptimizationPerplexityLlmResponsesLiveRequestInfo {
-  return {
-    ...fields,
-    init(data?: unknown) {
-      if (isRecord(data)) Object.assign(this, data);
-    },
-    toJSON(data?: unknown) {
-      return {
-        ...(isRecord(data) ? data : {}),
-        ...fields,
-      };
-    },
-  };
-}
 
 export async function fetchLlmResponse(
   input: LlmResponsesInput,
 ): Promise<DataforseoApiResponse<LlmResponseResult>> {
-  // Fail fast on an unknown model_name: DataForSEO charges for tasks that fail
-  // with `Invalid Field: 'model_name'`, so we must never dispatch one.
   if (!ACCEPTED_LLM_MODEL_NAMES[input.modelSlug].has(input.modelName)) {
     throw new AppError(
       "VALIDATION_ERROR",
@@ -372,50 +317,46 @@ export async function fetchLlmResponse(
     );
   }
 
-  // DataForSEO's Gemini endpoint rejects `web_search_country_iso_code` with a
-  // 40501 "Invalid Field" error. The other three models accept it.
-  const supportsCountry = input.modelSlug !== "gemini";
-  const fields: LlmResponseRequestFields = {
-    user_prompt: input.userPrompt,
+  const rand = seededRandom(hashSeed(input.userPrompt, input.modelSlug));
+  const webSearch = input.webSearch ?? true;
+  const promptSnippet = input.userPrompt.slice(0, 80);
+  const data: LlmResponseResult = {
     model_name: input.modelName,
-    web_search: input.webSearch ?? true,
-    max_output_tokens: clampLimit(input.maxOutputTokens ?? 1024, 256, 4096),
-    ...(supportsCountry && input.webSearchCountryCode
-      ? { web_search_country_iso_code: input.webSearchCountryCode }
-      : {}),
+    output_tokens: randInt(
+      rand,
+      120,
+      clampLimit(input.maxOutputTokens ?? 1024, 256, 4096),
+    ),
+    web_search: webSearch,
+    items: [
+      {
+        type: "message",
+        sections: [
+          {
+            type: "text",
+            text: `Regarding "${promptSnippet}" — here is a synthesized answer based on generally available information.`,
+            annotations: webSearch
+              ? [
+                  {
+                    type: "citation",
+                    title: "Example Source",
+                    url: "https://example.com/reference",
+                  },
+                ]
+              : [],
+          },
+        ],
+      },
+    ],
+    fan_out_queries: weightedBool(rand, 0.6)
+      ? [promptSnippet, `${promptSnippet} reviews`]
+      : [],
   };
-
-  const api = aiOptimizationApi(classifyAiSearchError);
-  const response =
-    input.modelSlug === "chat_gpt"
-      ? await api.chatGptLlmResponsesLive([
-          new AiOptimizationChatGptLlmResponsesLiveRequestInfo(fields),
-        ])
-      : input.modelSlug === "claude"
-        ? await api.claudeLlmResponsesLive([
-            new AiOptimizationClaudeLlmResponsesLiveRequestInfo(fields),
-          ])
-        : input.modelSlug === "gemini"
-          ? await api.geminiLlmResponsesLive([
-              new AiOptimizationGeminiLlmResponsesLiveRequestInfo(fields),
-            ])
-          : await api.perplexityLlmResponsesLive([
-              // The generated Perplexity request class drops `web_search` in
-              // toJSON(), while the SDK method only JSON.stringify's this body.
-              buildPerplexityLlmResponseRequest(fields),
-            ]);
-
-  const task = assertOk(
-    response,
-    assertOptions(`/v3/ai_optimization/${input.modelSlug}/llm_responses/live`),
-  );
-
-  const result = llmResponseResultSchema.safeParse(firstResult(task) ?? {});
-  if (!result.success) {
-    throw new AppError(
-      "INTERNAL_ERROR",
-      "DataForSEO llm_responses returned an invalid response shape",
-    );
-  }
-  return { data: result.data, billing: buildTaskBilling(task) };
+  return {
+    data,
+    billing: {
+      path: billingPath(input.modelSlug, "llm_responses", "live"),
+      costUsd: 0,
+    },
+  };
 }

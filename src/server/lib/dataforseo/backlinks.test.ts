@@ -1,33 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AppError } from "@/server/lib/errors";
-
-vi.mock("@/server/lib/runtime-env", () => ({
-  getRequiredEnvValue: vi.fn(async () => "test-api-key"),
-}));
-
-const { classifyBacklinksError } = vi.hoisted(() => ({
-  classifyBacklinksError: vi.fn(),
-}));
-
-// The classifier is built inside backlinks.ts via createDataforseoBillingClassifier;
-// returning our hoisted mock lets the test drive classification.
-vi.mock("@/server/lib/dataforseoBillingClassification", () => ({
-  createDataforseoBillingClassifier: () => classifyBacklinksError,
-}));
-
+import { describe, expect, it } from "vitest";
 import {
-  fetchBacklinksHistory,
   fetchBacklinksRows,
   fetchBacklinksSummary,
   normalizeBacklinksTarget,
 } from "@/server/lib/dataforseo/backlinks";
-
-// A successful DataForSEO task always carries billing metadata (path + cost).
-const billed = {
-  path: ["v3", "backlinks", "summary", "live"],
-  cost: 0.02,
-  result_count: 0,
-};
 
 describe("normalizeBacklinksTarget", () => {
   it("treats explicit homepage URLs as page lookups", () => {
@@ -93,130 +69,28 @@ describe("normalizeBacklinksTarget", () => {
   });
 });
 
-describe("fetchBacklinksSummary", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
+describe("mock fetchers", () => {
+  it("returns the same summary for the same target across calls", async () => {
+    const first = await fetchBacklinksSummary({ target: "example.com" });
+    const second = await fetchBacklinksSummary({ target: "example.com" });
+    expect(first.data).toEqual(second.data);
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-    vi.clearAllMocks();
-  });
-
-  it("classifies top-level DataForSEO body errors using status_code", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status_code: 40200,
-          status_message: "Account balance is too low",
-          tasks: [],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-    classifyBacklinksError.mockImplementation((status: number | undefined) => {
-      if (status === 40200) {
-        return new AppError(
-          "BACKLINKS_BILLING_ISSUE",
-          "The connected DataForSEO account has a billing or balance issue",
-        );
-      }
-      return null;
+  it("respects limit/offset and keeps totalCount stable across pages", async () => {
+    const pageOne = await fetchBacklinksRows({
+      target: "example.com",
+      limit: 5,
+      offset: 0,
     });
-
-    await expect(
-      fetchBacklinksSummary({ target: "example.com" }),
-    ).rejects.toMatchObject({ code: "BACKLINKS_BILLING_ISSUE" });
-
-    expect(classifyBacklinksError).toHaveBeenCalledWith(
-      40200,
-      expect.stringContaining("Account balance is too low"),
-      "/v3/backlinks/summary/live",
-    );
-  });
-
-  it("treats null summary results as a valid zero-data response", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status_code: 20000,
-          status_message: "Ok.",
-          tasks: [
-            {
-              status_code: 20000,
-              status_message: "Ok.",
-              ...billed,
-              result: [null],
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-    classifyBacklinksError.mockReturnValue(null);
-
-    await expect(
-      fetchBacklinksSummary({ target: "not-a-real-input.example" }),
-    ).resolves.toMatchObject({ data: {} });
-  });
-
-  it("treats empty summary results as a valid zero-data response", async () => {
-    vi.mocked(fetch).mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status_code: 20000,
-          status_message: "Ok.",
-          tasks: [
-            {
-              status_code: 20000,
-              status_message: "Ok.",
-              ...billed,
-              result: [],
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      ),
-    );
-    classifyBacklinksError.mockReturnValue(null);
-
-    await expect(
-      fetchBacklinksSummary({ target: "example.com" }),
-    ).resolves.toMatchObject({ data: {} });
-  });
-
-  it("treats empty backlinks rows and history results as valid empty arrays", async () => {
-    const emptyOk = () =>
-      new Response(
-        JSON.stringify({
-          status_code: 20000,
-          status_message: "Ok.",
-          tasks: [
-            {
-              status_code: 20000,
-              status_message: "Ok.",
-              ...billed,
-              result: [],
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    vi.mocked(fetch)
-      .mockResolvedValueOnce(emptyOk())
-      .mockResolvedValueOnce(emptyOk());
-    classifyBacklinksError.mockReturnValue(null);
-
-    await expect(
-      fetchBacklinksRows({ target: "example.com" }),
-    ).resolves.toMatchObject({ data: { items: [], totalCount: null } });
-    await expect(
-      fetchBacklinksHistory({
-        target: "example.com",
-        dateFrom: "2025-01-01",
-        dateTo: "2025-12-31",
-      }),
-    ).resolves.toMatchObject({ data: [] });
+    const pageTwo = await fetchBacklinksRows({
+      target: "example.com",
+      limit: 5,
+      offset: 5,
+    });
+    expect(pageOne.data.items).toHaveLength(5);
+    expect(pageTwo.data.items).toHaveLength(5);
+    expect(pageOne.data.totalCount).toEqual(pageTwo.data.totalCount);
+    expect(pageOne.data.items[0]).not.toEqual(pageTwo.data.items[0]);
   });
 });
 

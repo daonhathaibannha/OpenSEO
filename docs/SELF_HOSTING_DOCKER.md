@@ -19,7 +19,7 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Set `DATAFORSEO_API_KEY` in `.env`, then open `http://localhost:<PORT>` (default `3001`).
+Open `http://localhost:<PORT>` (default `3001`).
 
 Docker Compose passes `.env` values into the container, and `compose.yaml` enables `CLOUDFLARE_INCLUDE_PROCESS_ENV=true` so the Cloudflare Vite runtime can read them as Worker bindings during local self-hosting.
 
@@ -90,9 +90,7 @@ To confirm Docker Compose is using the expected environment variables:
 docker compose config
 ```
 
-Check that `AUTH_MODE=local_noauth`, and that `DATAFORSEO_API_KEY` is the base64
-encoded value of your DataForSEO email and API password in this format:
-`email:password`.
+Check that `AUTH_MODE=local_noauth`.
 
 If you changed `.env`, recreate the container so Compose reapplies it:
 

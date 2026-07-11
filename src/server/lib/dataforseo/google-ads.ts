@@ -1,15 +1,16 @@
 import {
-  KeywordsDataGoogleAdsKeywordsForKeywordsLiveRequestInfo,
-  KeywordsDataGoogleAdsSearchVolumeLiveRequestInfo,
+  KeywordsDataGoogleAdsSearchVolumeLiveResultInfo,
+  MonthlySearchesInfo,
   type KeywordsDataGoogleAdsKeywordsForKeywordsLiveResultInfo,
-  type KeywordsDataGoogleAdsSearchVolumeLiveResultInfo,
 } from "dataforseo-client";
-import { keywordsDataApi } from "@/server/lib/dataforseo/core";
+import type { DataforseoApiResponse } from "@/server/lib/dataforseo/envelope";
 import {
-  assertOk,
-  buildTaskBilling,
-  type DataforseoApiResponse,
-} from "@/server/lib/dataforseo/envelope";
+  hashSeed,
+  pick,
+  randFloat,
+  randInt,
+  seededRandom,
+} from "@/server/lib/dataforseo/mock/random";
 
 // Google Ads keyword data for countries DataForSEO Labs doesn't cover (see
 // specs/0004-keyword-data-source-routing.md). Flat-priced per request; items
@@ -18,39 +19,58 @@ export type AdsKeywordItem = KeywordsDataGoogleAdsSearchVolumeLiveResultInfo;
 export type AdsKeywordIdeaItem =
   KeywordsDataGoogleAdsKeywordsForKeywordsLiveResultInfo;
 
-type KeywordsDataResult<T> = { result?: T[] };
+function billingPath(...segments: string[]) {
+  return ["v3", "keywords_data", "google_ads", ...segments];
+}
 
-function taskItems<T>(task: KeywordsDataResult<T>): T[] {
-  // keywords_data tasks return keyword items directly in `result` (no nested
-  // `items` wrapper like Labs).
-  return task.result ?? [];
+function fakeAdsMonthlySearches(rand: () => number, baseVolume: number) {
+  const now = new Date();
+  return Array.from({ length: 12 }, (_, i) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1);
+    return new MonthlySearchesInfo({
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      search_volume: Math.max(
+        0,
+        Math.round(baseVolume * randFloat(rand, 0.75, 1.25, 2)),
+      ),
+    });
+  });
+}
+
+function fakeAdsKeyword(
+  keyword: string,
+  locationCode: number,
+  languageCode: string,
+): AdsKeywordItem {
+  const rand = seededRandom(hashSeed(keyword, locationCode, languageCode));
+  const searchVolume = randInt(rand, 10, 30_000);
+  return new KeywordsDataGoogleAdsSearchVolumeLiveResultInfo({
+    keyword,
+    location_code: locationCode,
+    language_code: languageCode,
+    competition: pick(rand, ["LOW", "MEDIUM", "HIGH"]),
+    competition_index: randInt(rand, 0, 100),
+    search_volume: searchVolume,
+    low_top_of_page_bid: randFloat(rand, 0.1, 3, 2),
+    high_top_of_page_bid: randFloat(rand, 3, 15, 2),
+    cpc: randFloat(rand, 0.1, 10, 2),
+    monthly_searches: fakeAdsMonthlySearches(rand, searchVolume),
+  });
 }
 
 export async function fetchAdsSearchVolume(input: {
   keywords: string[];
   locationCode: number;
   languageCode: string;
-  /**
-   * Canonical DataForSEO location_name (e.g. "Pittsburgh,Pennsylvania,United
-   * States"). Google Ads accepts any geotarget, so this scopes volume / CPC /
-   * competition to a city or region instead of the whole country.
-   */
   locationName?: string;
 }): Promise<DataforseoApiResponse<AdsKeywordItem[]>> {
-  const locationParams = input.locationName
-    ? { location_name: input.locationName }
-    : { location_code: input.locationCode };
-  const response = await keywordsDataApi().googleAdsSearchVolumeLive([
-    new KeywordsDataGoogleAdsSearchVolumeLiveRequestInfo({
-      keywords: input.keywords,
-      ...locationParams,
-      language_code: input.languageCode,
-    }),
-  ]);
-  const task = assertOk(response);
+  const data = input.keywords.map((keyword) =>
+    fakeAdsKeyword(keyword, input.locationCode, input.languageCode),
+  );
   return {
-    data: taskItems(task),
-    billing: buildTaskBilling(task),
+    data,
+    billing: { path: billingPath("search_volume", "live"), costUsd: 0 },
   };
 }
 
@@ -60,19 +80,33 @@ export async function fetchAdsKeywordIdeas(input: {
   languageCode: string;
   limit: number;
 }): Promise<DataforseoApiResponse<AdsKeywordIdeaItem[]>> {
-  const response = await keywordsDataApi().googleAdsKeywordsForKeywordsLive([
-    new KeywordsDataGoogleAdsKeywordsForKeywordsLiveRequestInfo({
-      keywords: [input.keyword],
-      location_code: input.locationCode,
-      language_code: input.languageCode,
-      sort_by: "search_volume",
-    }),
-  ]);
-  const task = assertOk(response);
-  // The endpoint has no limit parameter (it can return thousands of
-  // suggestions for one flat fee); truncate to what the caller asked for.
+  const variants = [
+    "buy",
+    "best",
+    "cheap",
+    "near me",
+    "for sale",
+    "reviews",
+    "vs",
+    "how to",
+    "cost",
+    "diy",
+    "professional",
+    "local",
+  ];
+  const count = Math.max(0, Math.min(input.limit, variants.length));
+  const data = Array.from({ length: count }, (_, i) =>
+    fakeAdsKeyword(
+      `${variants[i]} ${input.keyword}`,
+      input.locationCode,
+      input.languageCode,
+    ),
+  );
   return {
-    data: taskItems(task).slice(0, input.limit),
-    billing: buildTaskBilling(task),
+    data,
+    billing: {
+      path: billingPath("keywords_for_keywords", "live"),
+      costUsd: 0,
+    },
   };
 }

@@ -4,7 +4,6 @@
 
 - Node.js 20+
 - [pnpm](https://pnpm.io/)
-- A DataForSEO account/API credentials
 
 ## Local Development Workflow
 
@@ -18,9 +17,6 @@ pnpm run db:migrate:local
 Configure `.env.local`:
 
 1. `cp .env.example .env.local`
-2. Add `DATAFORSEO_API_KEY` as a base64-encoded `login:password` value:
-
-   `printf '%s' 'YOUR_LOGIN:YOUR_PASSWORD' | base64`
 
 Run locally:
 

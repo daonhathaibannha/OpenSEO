@@ -34,7 +34,6 @@ In the Cloudflare dashboard:
 5. In `Variables & Secrets`, add:
    - `POLICY_AUD` (from Access setup)
    - `TEAM_DOMAIN` (domain from `JWKS_URL`, for example `https://your-team.cloudflareaccess.com`)
-   - `DATAFORSEO_API_KEY`
 
 ### 3) Optional: add an R2 lifecycle rule
 
@@ -229,7 +228,6 @@ Then set the same values as Worker secrets with Wrangler:
 ```bash
 pnpm exec wrangler secret put TEAM_DOMAIN
 pnpm exec wrangler secret put POLICY_AUD
-pnpm exec wrangler secret put DATAFORSEO_API_KEY
 ```
 
 Use the domain from `JWKS_URL` for `TEAM_DOMAIN`, for example `https://your-team.cloudflareaccess.com`. Use the Access application audience value for `POLICY_AUD`.

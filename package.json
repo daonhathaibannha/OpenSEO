@@ -39,8 +39,6 @@
     "test:e2e:domain": "playwright test e2e/domain-overview-filters.spec.ts",
     "test:e2e:domain:perf": "playwright test e2e/domain-overview-filters.perf.spec.ts",
     "test:e2e:keywords": "playwright test e2e/keyword-research-navigation.spec.ts",
-    "billing:backlinks": "tsx scripts/backlinks-cost-profile.ts",
-    "billing:brand-lookup": "tsx scripts/brand-lookup-cost-profile.ts",
     "cleanup:default-projects:d1": "tsx scripts/d1-default-project-cleanup.ts",
     "seed:rank-tracking": "tsx scripts/seed-rank-tracking.ts",
     "ci:check": "prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
@@ -55,9 +53,6 @@
       },
       "POLICY_AUD": {
         "description": "Cloudflare Access Application Audience (AUD) tag for this Worker route/domain."
-      },
-      "DATAFORSEO_API_KEY": {
-        "description": "Base64-encoded `login:password` for DataForSEO API access."
       },
       "OAUTH_KV": {
         "description": "KV namespace used by the Cloudflare Workers OAuth provider for MCP client registrations, grants, and tokens."
