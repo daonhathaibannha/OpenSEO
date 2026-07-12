@@ -49,12 +49,16 @@ docker compose up -d
 
 ## Build your own image locally
 
-If you are testing local code changes, build and run a local tag:
+If you are testing local code changes, build and run a local tag with Compose
+directly (`--build` forces it to build from `Dockerfile.selfhost` instead of
+pulling):
 
 ```bash
-docker build -f Dockerfile.selfhost -t open-seo:local .
-OPEN_SEO_IMAGE=open-seo:local docker compose up -d
+OPEN_SEO_IMAGE=open-seo:local docker compose up -d --build
 ```
+
+You can also persist `OPEN_SEO_IMAGE=open-seo:local` in `.env` so future
+`docker compose up -d --build` runs don't need it inline.
 
 ## Common commands
 

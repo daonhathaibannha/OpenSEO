@@ -1,6 +1,11 @@
 services:
   open-seo:
     image: ${OPEN_SEO_IMAGE:-ghcr.io/every-app/open-seo:latest}
+    # Only used when you explicitly pass --build (e.g. `docker compose up -d
+    # --build`); otherwise Compose just pulls/uses `image:` above unchanged.
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
     restart: unless-stopped
     environment:
       # Required for local Docker self-hosting: exposes Compose env vars to cloudflare:workers bindings.
