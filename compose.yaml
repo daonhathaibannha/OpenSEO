@@ -10,26 +10,17 @@ services:
     environment:
       # Required for local Docker self-hosting: exposes Compose env vars to cloudflare:workers bindings.
       - CLOUDFLARE_INCLUDE_PROCESS_ENV=true
-      - PORT=${PORT:-3001}
+      - PORT=${PORT:-2492}
       - ALLOWED_HOST=${ALLOWED_HOST:-}
-      # local_noauth (default): no login, single shared admin@localhost user.
-      # local_auth: real email/password login, admin-managed accounts — see
-      # docs/SELF_HOSTING_DOCKER.md#requiring-login.
-      - AUTH_MODE=${AUTH_MODE:-local_noauth}
-      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
-      - BETTER_AUTH_URL=${BETTER_AUTH_URL:-}
-      # Only read once by `pnpm run seed:admin-user` (run manually after first
-      # boot) — not consumed by the app itself.
-      - INITIAL_ADMIN_EMAIL=${INITIAL_ADMIN_EMAIL:-}
-      - INITIAL_ADMIN_NAME=${INITIAL_ADMIN_NAME:-}
-      - INITIAL_ADMIN_PASSWORD=${INITIAL_ADMIN_PASSWORD:-}
+      - AUTH_MODE=local_noauth
       # Optional: Google Search Console. See
       # docs/SELF_HOSTING_GOOGLE_SEARCH_CONSOLE.md
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+      - BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET:-}
       - VITE_SHOW_DEVTOOLS=false
     ports:
-      - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
+      - "127.0.0.1:${PORT:-2492}:${PORT:-2492}"
     volumes:
       - open_seo_data:/app/.wrangler
 volumes:
