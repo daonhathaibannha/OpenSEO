@@ -50,8 +50,21 @@ async function getHostedUser(userId: string) {
   });
 }
 
+// `local_auth` mode: everyone shares one organization, so there's only ever
+// one row here — used to find it regardless of which user is asking.
+async function findAnyOrganizationId() {
+  const [existingOrganization] = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .orderBy(asc(organization.createdAt))
+    .limit(1);
+
+  return existingOrganization?.id ?? null;
+}
+
 export const AuthRepository = {
   upsertDelegatedOrganization,
   findFirstOrganizationIdForUser,
+  findAnyOrganizationId,
   getHostedUser,
 } as const;

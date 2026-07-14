@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Settings,
   User,
+  Users,
   X,
 } from "lucide-react";
 import {
@@ -20,7 +21,10 @@ import { SamSidebarPanel } from "@/client/features/sam/SamSidebarPanel";
 import { ThemePreferenceMenuItems } from "@/client/components/ThemePreferenceMenuItems";
 import { closeDropdown } from "@/client/lib/dropdown";
 import { signOutAndRedirect, useSession } from "@/lib/auth-client";
-import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import {
+  isHostedClientAuthMode,
+  isLoginRequiredClientMode,
+} from "@/lib/auth-mode";
 import { BILLING_ROUTE } from "@/shared/billing";
 
 interface SidebarProps {
@@ -212,6 +216,8 @@ function SidebarViewTab({
 function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
   const { data: session } = useSession();
   const isHostedMode = isHostedClientAuthMode();
+  const loginRequired = isLoginRequiredClientMode();
+  const isAdmin = session?.user?.role === "admin";
   const email = session?.user?.email;
 
   const closeMenu = () => {
@@ -259,8 +265,16 @@ function SidebarFooter({ onNavigate }: { onNavigate?: () => void }) {
                 </Link>
               </li>
             ) : null}
+            {isAdmin ? (
+              <li>
+                <Link to="/settings/user-management" onClick={closeMenu}>
+                  <Users className="h-4 w-4" />
+                  User Management
+                </Link>
+              </li>
+            ) : null}
             <ThemePreferenceMenuItems />
-            {isHostedMode ? (
+            {loginRequired ? (
               <>
                 <li
                   aria-hidden

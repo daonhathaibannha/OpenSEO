@@ -12,5 +12,9 @@ export type EnsuredUserContext = {
   // gate paid onboarding spend behind verification.
   emailVerified: boolean;
   organizationId: string;
+  // Better Auth admin-plugin role ("admin" | "user"), populated for
+  // `hosted`/`local_auth` sessions. Undefined for delegated modes
+  // (Cloudflare Access / local_noauth) — those have no per-user roles.
+  role?: string;
   project?: EnsuredProject;
 };

@@ -1,6 +1,6 @@
 import { useForm } from "@tanstack/react-form";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   AuthPageCard,
   AuthMethodChooser,
@@ -51,7 +51,8 @@ export const Route = createFileRoute("/_auth/sign-up")({
 function SignUpPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { redirectTo, isHostedMode } = useAuthPageState(search.redirect);
+  const { redirectTo, authMode } = useAuthPageState(search.redirect);
+  const isHostedMode = authMode === "hosted";
   const postSignupRedirect = redirectTo === "/" ? "/onboarding" : redirectTo;
   const [showEmailForm, setShowEmailForm] = useState(false);
   const google = useGoogleSignUp({ redirectTo, postSignupRedirect });
@@ -59,6 +60,16 @@ function SignUpPage() {
   // Turnstile is active only in hosted mode with a configured site key.
   const isTurnstileEnabled = isHostedMode && Boolean(TURNSTILE_SITE_KEY);
   const captcha = useTurnstileCaptcha();
+
+  // local_auth: no self-service signup — bounce to sign-in.
+  useEffect(() => {
+    if (authMode !== "local_auth") return;
+    void navigate({
+      to: "/sign-in",
+      search: getSignInSearch(redirectTo),
+      replace: true,
+    });
+  }, [authMode, navigate, redirectTo]);
 
   const form = useForm({
     defaultValues: {
@@ -147,6 +158,8 @@ function SignUpPage() {
       }
     },
   });
+
+  if (authMode === "local_auth") return null;
 
   return (
     <AuthPageCard

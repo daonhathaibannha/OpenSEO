@@ -41,6 +41,7 @@
     "test:e2e:keywords": "playwright test e2e/keyword-research-navigation.spec.ts",
     "cleanup:default-projects:d1": "tsx scripts/d1-default-project-cleanup.ts",
     "seed:rank-tracking": "tsx scripts/seed-rank-tracking.ts",
+    "seed:admin-user": "tsx scripts/seed-admin-user.ts",
     "ci:check": "prettier --check . && knip && tsc --noEmit && oxlint . --type-aware"
   },
   "cloudflare": {

@@ -10,6 +10,7 @@ const ensuredUserContextSchema: z.ZodType<EnsuredUserContext> = z.object({
   userEmail: z.string(),
   emailVerified: z.boolean(),
   organizationId: z.string(),
+  role: z.string().optional(),
   project: z.any().optional(),
 });
 
@@ -32,6 +33,24 @@ export const globalServerFunctionMiddleware = [
 export const requireAuthenticatedContext = [
   createMiddleware({ type: "function" }).server(async ({ next, context }) => {
     const authenticatedContext = getAuthenticatedContext(context);
+
+    return next({
+      context: authenticatedContext,
+    });
+  }),
+] as const;
+
+// Gates User Management (and any future admin-only server function) behind
+// the Better Auth admin-plugin role. Only meaningful in `hosted`/`local_auth`
+// — delegated modes (Cloudflare Access / local_noauth) never populate `role`,
+// so they're rejected here too rather than silently treated as admin.
+export const requireAdminContext = [
+  createMiddleware({ type: "function" }).server(async ({ next, context }) => {
+    const authenticatedContext = getAuthenticatedContext(context);
+
+    if (authenticatedContext.role !== "admin") {
+      throw new AppError("FORBIDDEN");
+    }
 
     return next({
       context: authenticatedContext,

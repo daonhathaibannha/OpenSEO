@@ -3,7 +3,7 @@ import {
   getCurrentAuthRedirect,
   getOAuthSignedQuery,
 } from "@/lib/auth-redirect";
-import { isHostedClientAuthMode } from "@/lib/auth-mode";
+import { getClientAuthUiMode } from "@/lib/auth-mode";
 
 export const authRedirectSearchSchema = z.object({
   redirect: z.string().optional(),
@@ -15,12 +15,20 @@ export function useAuthPageState(redirect: string | undefined) {
     typeof window !== "undefined"
       ? getOAuthSignedQuery(window.location.search)
       : null;
-  const isHostedMode = isHostedClientAuthMode();
+  // "hosted": full auth UI (Google, self-signup, email-based reset).
+  // "local_auth": bare email+password only, no signup, admin-driven resets.
+  // null: no login required (local_noauth / cloudflare_access) — this page
+  // shouldn't be reachable, but the field stays honest either way.
+  const authMode = getClientAuthUiMode();
+  const isHostedMode = authMode === "hosted";
+  const isLoginRequiredMode = authMode !== null;
 
   return {
     redirectTo,
     oauthQuery,
+    authMode,
     isHostedMode,
+    isLoginRequiredMode,
   };
 }
 

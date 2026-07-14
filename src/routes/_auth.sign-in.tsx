@@ -26,11 +26,13 @@ export const Route = createFileRoute("/_auth/sign-in")({
 function SignInPage() {
   const search = Route.useSearch();
   const navigate = useNavigate();
-  const { redirectTo, oauthQuery, isHostedMode } = useAuthPageState(
-    search.redirect,
-  );
+  const { redirectTo, oauthQuery, authMode, isLoginRequiredMode } =
+    useAuthPageState(search.redirect);
+  const isHostedMode = authMode === "hosted";
   const authCallbackURL = redirectTo;
-  const [showEmailForm, setShowEmailForm] = useState(false);
+  // local_auth has no method to choose (no Google, no signup) — skip
+  // straight to the email/password form.
+  const [showEmailForm, setShowEmailForm] = useState(authMode === "local_auth");
   const [isStartingGoogle, setIsStartingGoogle] = useState(false);
   const [socialError, setSocialError] = useState<string | null>(null);
 
@@ -190,7 +192,7 @@ function SignInPage() {
                     value={field.state.value}
                     onChange={(event) => field.handleChange(event.target.value)}
                     autoComplete="email"
-                    disabled={!isHostedMode}
+                    disabled={!isLoginRequiredMode}
                     required
                   />
                   {error ? (
@@ -214,7 +216,7 @@ function SignInPage() {
                     value={field.state.value}
                     onChange={(event) => field.handleChange(event.target.value)}
                     autoComplete="current-password"
-                    disabled={!isHostedMode}
+                    disabled={!isLoginRequiredMode}
                     required
                   />
                   {error ? (
@@ -240,7 +242,7 @@ function SignInPage() {
                   ) : null}
                   <button
                     className="btn btn-soft w-full"
-                    disabled={!isHostedMode || isSubmitting}
+                    disabled={!isLoginRequiredMode || isSubmitting}
                   >
                     {isSubmitting ? "Signing in..." : "Sign in"}
                   </button>

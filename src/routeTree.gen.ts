@@ -28,9 +28,11 @@ import { Route as AppBillingRouteImport } from './routes/_app/billing'
 import { Route as AppAiRouteImport } from './routes/_app/ai'
 import { Route as Char91DotwellKnownChar93OpenaiAppsChallengeRouteImport } from './routes/[.well-known]/openai-apps-challenge'
 import { Route as AuthenticatedOnboardingIndexRouteImport } from './routes/_authenticated.onboarding.index'
+import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings.index'
 import { Route as ApiAutumnSplatRouteImport } from './routes/api/autumn/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AuthenticatedOnboardingChatRouteImport } from './routes/_authenticated.onboarding.chat'
+import { Route as AppSettingsUserManagementRouteImport } from './routes/_app/settings.user-management'
 import { Route as AppHelpOpenrouterApiKeyRouteImport } from './routes/_app/help/openrouter-api-key'
 import { Route as ProjectPProjectIdRouteRouteImport } from './routes/_project/p/$projectId/route'
 import { Route as ProjectPProjectIdIndexRouteImport } from './routes/_project/p/$projectId/index'
@@ -145,6 +147,11 @@ const AuthenticatedOnboardingIndexRoute =
     path: '/onboarding/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const ApiAutumnSplatRoute = ApiAutumnSplatRouteImport.update({
   id: '/api/autumn/$',
   path: '/api/autumn/$',
@@ -160,6 +167,12 @@ const AuthenticatedOnboardingChatRoute =
     id: '/onboarding/chat',
     path: '/onboarding/chat',
     getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AppSettingsUserManagementRoute =
+  AppSettingsUserManagementRouteImport.update({
+    id: '/user-management',
+    path: '/user-management',
+    getParentRoute: () => AppSettingsRoute,
   } as any)
 const AppHelpOpenrouterApiKeyRoute = AppHelpOpenrouterApiKeyRouteImport.update({
   id: '/help/openrouter-api-key',
@@ -277,7 +290,7 @@ export interface FileRoutesByFullPath {
   '/ai': typeof AppAiRoute
   '/billing': typeof AppBillingRoute
   '/projects': typeof AppProjectsRoute
-  '/settings': typeof AppSettingsRoute
+  '/settings': typeof AppSettingsRouteWithChildren
   '/support': typeof AppSupportRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
@@ -285,9 +298,11 @@ export interface FileRoutesByFullPath {
   '/subscribe': typeof AuthenticatedSubscribeRoute
   '/p/$projectId': typeof ProjectPProjectIdRouteRouteWithChildren
   '/help/openrouter-api-key': typeof AppHelpOpenrouterApiKeyRoute
+  '/settings/user-management': typeof AppSettingsUserManagementRoute
   '/onboarding/chat': typeof AuthenticatedOnboardingChatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/autumn/$': typeof ApiAutumnSplatRoute
+  '/settings/': typeof AppSettingsIndexRoute
   '/onboarding/': typeof AuthenticatedOnboardingIndexRoute
   '/p/$projectId/audit': typeof ProjectPProjectIdAuditRouteWithChildren
   '/p/$projectId/backlinks': typeof ProjectPProjectIdBacklinksRoute
@@ -316,16 +331,17 @@ export interface FileRoutesByTo {
   '/ai': typeof AppAiRoute
   '/billing': typeof AppBillingRoute
   '/projects': typeof AppProjectsRoute
-  '/settings': typeof AppSettingsRoute
   '/support': typeof AppSupportRoute
   '/sign-in': typeof AuthSignInRoute
   '/sign-up': typeof AuthSignUpRoute
   '/oauth-consent': typeof AuthenticatedOauthConsentRoute
   '/subscribe': typeof AuthenticatedSubscribeRoute
   '/help/openrouter-api-key': typeof AppHelpOpenrouterApiKeyRoute
+  '/settings/user-management': typeof AppSettingsUserManagementRoute
   '/onboarding/chat': typeof AuthenticatedOnboardingChatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/autumn/$': typeof ApiAutumnSplatRoute
+  '/settings': typeof AppSettingsIndexRoute
   '/onboarding': typeof AuthenticatedOnboardingIndexRoute
   '/p/$projectId/backlinks': typeof ProjectPProjectIdBacklinksRoute
   '/p/$projectId/brand-lookup': typeof ProjectPProjectIdBrandLookupRoute
@@ -356,7 +372,7 @@ export interface FileRoutesById {
   '/_app/ai': typeof AppAiRoute
   '/_app/billing': typeof AppBillingRoute
   '/_app/projects': typeof AppProjectsRoute
-  '/_app/settings': typeof AppSettingsRoute
+  '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/support': typeof AppSupportRoute
   '/_auth/sign-in': typeof AuthSignInRoute
   '/_auth/sign-up': typeof AuthSignUpRoute
@@ -365,9 +381,11 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_project/p/$projectId': typeof ProjectPProjectIdRouteRouteWithChildren
   '/_app/help/openrouter-api-key': typeof AppHelpOpenrouterApiKeyRoute
+  '/_app/settings/user-management': typeof AppSettingsUserManagementRoute
   '/_authenticated/onboarding/chat': typeof AuthenticatedOnboardingChatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/autumn/$': typeof ApiAutumnSplatRoute
+  '/_app/settings/': typeof AppSettingsIndexRoute
   '/_authenticated/onboarding/': typeof AuthenticatedOnboardingIndexRoute
   '/_project/p/$projectId/audit': typeof ProjectPProjectIdAuditRouteWithChildren
   '/_project/p/$projectId/backlinks': typeof ProjectPProjectIdBacklinksRoute
@@ -406,9 +424,11 @@ export interface FileRouteTypes {
     | '/subscribe'
     | '/p/$projectId'
     | '/help/openrouter-api-key'
+    | '/settings/user-management'
     | '/onboarding/chat'
     | '/api/auth/$'
     | '/api/autumn/$'
+    | '/settings/'
     | '/onboarding/'
     | '/p/$projectId/audit'
     | '/p/$projectId/backlinks'
@@ -437,16 +457,17 @@ export interface FileRouteTypes {
     | '/ai'
     | '/billing'
     | '/projects'
-    | '/settings'
     | '/support'
     | '/sign-in'
     | '/sign-up'
     | '/oauth-consent'
     | '/subscribe'
     | '/help/openrouter-api-key'
+    | '/settings/user-management'
     | '/onboarding/chat'
     | '/api/auth/$'
     | '/api/autumn/$'
+    | '/settings'
     | '/onboarding'
     | '/p/$projectId/backlinks'
     | '/p/$projectId/brand-lookup'
@@ -485,9 +506,11 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_project/p/$projectId'
     | '/_app/help/openrouter-api-key'
+    | '/_app/settings/user-management'
     | '/_authenticated/onboarding/chat'
     | '/api/auth/$'
     | '/api/autumn/$'
+    | '/_app/settings/'
     | '/_authenticated/onboarding/'
     | '/_project/p/$projectId/audit'
     | '/_project/p/$projectId/backlinks'
@@ -657,6 +680,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOnboardingIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_app/settings/': {
+      id: '/_app/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/api/autumn/$': {
       id: '/api/autumn/$'
       path: '/api/autumn/$'
@@ -677,6 +707,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/onboarding/chat'
       preLoaderRoute: typeof AuthenticatedOnboardingChatRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/_app/settings/user-management': {
+      id: '/_app/settings/user-management'
+      path: '/user-management'
+      fullPath: '/settings/user-management'
+      preLoaderRoute: typeof AppSettingsUserManagementRouteImport
+      parentRoute: typeof AppSettingsRoute
     }
     '/_app/help/openrouter-api-key': {
       id: '/_app/help/openrouter-api-key'
@@ -814,11 +851,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppSettingsRouteChildren {
+  AppSettingsUserManagementRoute: typeof AppSettingsUserManagementRoute
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsUserManagementRoute: AppSettingsUserManagementRoute,
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+}
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+)
+
 interface AppRouteRouteChildren {
   AppAiRoute: typeof AppAiRoute
   AppBillingRoute: typeof AppBillingRoute
   AppProjectsRoute: typeof AppProjectsRoute
-  AppSettingsRoute: typeof AppSettingsRoute
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppSupportRoute: typeof AppSupportRoute
   AppIndexRoute: typeof AppIndexRoute
   AppHelpOpenrouterApiKeyRoute: typeof AppHelpOpenrouterApiKeyRoute
@@ -828,7 +879,7 @@ const AppRouteRouteChildren: AppRouteRouteChildren = {
   AppAiRoute: AppAiRoute,
   AppBillingRoute: AppBillingRoute,
   AppProjectsRoute: AppProjectsRoute,
-  AppSettingsRoute: AppSettingsRoute,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppSupportRoute: AppSupportRoute,
   AppIndexRoute: AppIndexRoute,
   AppHelpOpenrouterApiKeyRoute: AppHelpOpenrouterApiKeyRoute,

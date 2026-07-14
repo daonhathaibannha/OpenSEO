@@ -11,13 +11,25 @@ import { pgDb } from "@/db/pg/client";
 import * as pgSchema from "@/db/pg/schema";
 import { getDatabaseProvider } from "@/db/provider";
 import { z } from "zod";
-import { isHostedAuthMode } from "@/lib/auth-mode";
+import {
+  getAuthMode,
+  isHostedAuthMode,
+  isLoginRequiredAuthMode,
+} from "@/lib/auth-mode";
 import { createBaseAuthConfig } from "@/lib/auth-config";
 import {
   getHostedTurnstileSecretKey,
   hasHostedTurnstileConfig,
 } from "@/lib/auth-turnstile";
 import { getOrCreateDefaultHostedOrganization } from "@/server/auth/default-hosted-organization";
+// `local_auth` (self-hosted, login-required) reuses this same Better Auth
+// instance for email/password sessions, but deliberately avoids everything
+// hosted-SaaS-specific below it (Google OAuth, Turnstile, Autumn-tied
+// per-user orgs, disposable-email blocking) — see isHostedAuthMode()'s
+// doc-comment in auth-mode.ts. A future SSO provider would attach here too,
+// as an additional entry in getSocialProviders()/plugins, without touching
+// the local_auth branch below.
+import { getOrCreateSharedLocalOrganization } from "@/server/auth/shared-local-organization";
 import {
   sendHostedPasswordResetEmail,
   sendHostedVerificationEmail,
@@ -35,14 +47,64 @@ const hostedBaseUrlSchema = z
     );
   }, "BETTER_AUTH_URL must use https or localhost");
 
+// Explicitly typed (not inferred from `auth.api`) so this can be called from
+// inside `betterAuth({...})`'s own initializer without TS reporting a
+// circular "auth implicitly has type any" error — inferring straight from
+// `auth.api` there creates a self-reference cycle.
+type SessionOrgAuthApi = {
+  createOrganization: (input: {
+    body: { name: string; slug: string; userId: string };
+  }) => Promise<{ id: string } | null>;
+  addMember: (input: {
+    body: { userId: string; organizationId: string; role: "member" };
+  }) => Promise<unknown>;
+};
+
+async function createOrganizationOrThrow(
+  authApi: SessionOrgAuthApi,
+  body: { name: string; slug: string; userId: string },
+): Promise<{ id: string }> {
+  const result = await authApi.createOrganization({ body });
+  if (!result) {
+    throw new Error("Better Auth createOrganization returned no organization");
+  }
+  return result;
+}
+
+// `hosted`: one Autumn-billed org per user, auto-created on first session.
+// `local_auth`: everyone shares the single org that exists for this
+// deployment (see getOrCreateSharedLocalOrganization).
+async function resolveSessionOrganizationId(
+  userId: string,
+  authApi: SessionOrgAuthApi,
+): Promise<string> {
+  if (getAuthMode(env.AUTH_MODE) === "local_auth") {
+    return getOrCreateSharedLocalOrganization(
+      userId,
+      (input) => createOrganizationOrThrow(authApi, input),
+      (input) => authApi.addMember({ body: input }),
+    );
+  }
+  return getOrCreateDefaultHostedOrganization(userId, (body) =>
+    createOrganizationOrThrow(authApi, body),
+  );
+}
+
 function createAuth() {
-  // Hosted needs the real configured URL (cookies, callbacks, /api/auth routes
-  // all use it). Self-hosted only builds this instance to mint/refresh Search
-  // Console tokens, which never read baseURL — so a placeholder is fine there.
-  const baseUrl = isHostedAuthMode(env.AUTH_MODE)
+  // hosted/local_auth need the real configured URL (cookies, callbacks,
+  // /api/auth routes, trusted-origins all use it) since both mint real
+  // sessions. local_noauth/cloudflare_access never issue a Better Auth
+  // session — this instance exists there only to mint/refresh Search Console
+  // tokens, which don't read baseURL, so a placeholder is fine for them.
+  const baseUrl = isLoginRequiredAuthMode(env.AUTH_MODE)
     ? getHostedBaseUrl()
     : "http://localhost";
-  const bypassEmail = Reflect.get(env, "BYPASS_EMAIL_VERIFICATION") === "true";
+  // local_auth has no email service configured (self-hosted, no Loops keys)
+  // and accounts only ever come from admin-driven creation — those are
+  // pre-verified by construction, so verification is always bypassed there.
+  const bypassEmail =
+    Reflect.get(env, "BYPASS_EMAIL_VERIFICATION") === "true" ||
+    getAuthMode(env.AUTH_MODE) === "local_auth";
   const baseAuthConfig = createBaseAuthConfig();
 
   // Turnstile captcha on signup — hosted only. Enforcement is driven by the
@@ -132,11 +194,9 @@ function createAuth() {
       session: {
         create: {
           before: async (session) => {
-            // Inject Better Auth's createOrganization here so the helper can
-            // stay reusable without importing auth.ts and creating a cycle.
-            const organizationId = await getOrCreateDefaultHostedOrganization(
+            const organizationId: string = await resolveSessionOrganizationId(
               session.userId,
-              (body) => auth.api.createOrganization({ body }),
+              auth.api,
             );
 
             return {
@@ -277,6 +337,20 @@ export function hasHostedAuthConfig() {
       (Reflect.get(env, "BYPASS_EMAIL_VERIFICATION") === "true" ||
         hasHostedAuthEmailConfig())
     );
+  } catch {
+    return false;
+  }
+}
+
+// `local_auth` needs far less than `hosted`: no Google OAuth, no Turnstile,
+// no email provider (accounts are admin-created and pre-verified) — just a
+// base URL (matching the deployment's public origin, for cookies/CORS) and
+// the signing secret.
+export function hasLocalAuthConfig() {
+  try {
+    getHostedBaseUrl();
+    getHostedSecret();
+    return true;
   } catch {
     return false;
   }

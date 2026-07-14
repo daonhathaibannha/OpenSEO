@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { genericOAuth, organization } from "better-auth/plugins";
+import { admin, genericOAuth, organization } from "better-auth/plugins";
 import { baseAuthOptions } from "@/lib/auth-options";
 import { GSC_OAUTH_PROVIDER_ID, GSC_OAUTH_SCOPES } from "@/shared/gsc";
 
@@ -34,6 +34,12 @@ export function createBaseAuthConfig() {
       // — that's a "system action" (no session + userId in body) which better-auth
       // exempts from this flag, so the bootstrap keeps working.
       organization({ allowUserToCreateOrganization: false }),
+      // Gives every user a `role` ("admin" | "user") plus ban/session-revoke
+      // APIs. Used by the `local_auth` self-hosted mode's User Management
+      // module (admin.createUser / setUserPassword / removeUser) to create
+      // and manage accounts without self-service signup. Also available (but
+      // unused today) in `hosted` mode.
+      admin({ defaultRole: "user", adminRoles: ["admin"] }),
       genericOAuth({
         config: [
           {

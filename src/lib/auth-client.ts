@@ -1,5 +1,6 @@
 import { createAuthClient } from "better-auth/react";
 import {
+  adminClient,
   genericOAuthClient,
   inferAdditionalFields,
   organizationClient,
@@ -14,6 +15,10 @@ export const authClient = createAuthClient({
     organizationClient(),
     genericOAuthClient(),
     inferAdditionalFields({ user: userAdditionalFields }),
+    // Only used for session.user.role typing here (User Management gating in
+    // Sidebar) — the actual admin actions go through our own server
+    // functions (src/serverFunctions/userManagement.ts), not authClient.admin.*.
+    adminClient(),
   ],
 });
 
