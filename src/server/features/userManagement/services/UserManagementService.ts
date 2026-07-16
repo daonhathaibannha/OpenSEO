@@ -27,6 +27,7 @@ async function createUser(input: {
   name: string;
   password: string;
   isAdmin: boolean;
+  organizationId: string;
 }) {
   try {
     // Headerless call = a trusted system action (see admin plugin's
@@ -43,6 +44,20 @@ async function createUser(input: {
         data: { emailVerified: true },
       },
     });
+
+    // createUser only inserts into the `user` table — without an explicit
+    // membership here the new user has no `member` row, so they're excluded
+    // from listOrganizationMembers' inner join and invisible in the admin's
+    // user list until their first login lazily creates one (see
+    // shared-local-organization.ts).
+    await getAuth().api.addMember({
+      body: {
+        userId: result.user.id,
+        organizationId: input.organizationId,
+        role: "member",
+      },
+    });
+
     return result.user;
   } catch (error) {
     throw toAppError(error, "Failed to create user");

@@ -17,7 +17,12 @@ export const listManagedUsers = createServerFn({ method: "POST" })
 export const createManagedUser = createServerFn({ method: "POST" })
   .middleware(requireAdminContext)
   .validator(createManagedUserSchema)
-  .handler(async ({ data }) => UserManagementService.createUser(data));
+  .handler(async ({ data, context }) =>
+    UserManagementService.createUser({
+      ...data,
+      organizationId: context.organizationId,
+    }),
+  );
 
 export const resetManagedUserPassword = createServerFn({ method: "POST" })
   .middleware(requireAdminContext)
